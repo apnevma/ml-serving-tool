@@ -105,17 +105,26 @@ def _initialize_from_filesystem():
 def list_models():
     """List all available models with their status."""
     available = registry.list_available_models()
+    active_models_dict = registry.list_active_models()
     
     output = []
     for model_name, metadata in available.items():
-        is_active = registry.is_active(model_name)
+        is_active = model_name in active_models_dict
         
-        output.append({
+        model_entry = {
             "model_name": model_name,
             "status": "active" if is_active else "inactive",
             "model_path": metadata.get("model_path"),
+            "source": metadata.get("source", "unknown"),
             "predict_url": f"http://{API_HOST}:{PORT}/predict/{model_name}" if is_active else None
-        })
+        }
+        
+        # Include model_info for active models
+        if is_active:
+            active_data = active_models_dict[model_name]
+            model_entry["model_info"] = active_data.get("model_info", {})
+        
+        output.append(model_entry)
     
     return jsonify(output)
 
@@ -271,23 +280,36 @@ def help_endpoint():
     )
 
 
-@app.route('/help/ui')
-def help_ui():
-    """Web-based UI for exploring active models."""
+@app.route('/ui')
+def models_ui():
+    all_models = registry.list_available_models()
     active_models = registry.list_active_models()
     
-    models = [
-        {
-            "model_name": info["model_name"],
-            "endpoint_url": f"/predict/{info['model_name']}",
-            "model_info": info["model_info"]
+    models_data = []
+    for model_name, metadata in all_models.items():
+        is_active = model_name in active_models
+        
+        model_entry = {
+            "model_name": model_name,
+            "is_active": is_active,
+            "model_path": metadata.get("model_path"),
+            "source": metadata.get("source"),
         }
-        for info in active_models.values()
-    ]
+        
+        # If active, include runtime info
+        if is_active:
+            active_data = active_models[model_name]
+            model_entry["model_info"] = active_data["model_info"]
+            model_entry["endpoint_url"] = f"{api_url}/predict/{model_name}"
+        
+        models_data.append(model_entry)
+
+    # Sort: active models first, then alphabetically
+    models_data.sort(key=lambda m: (not m["is_active"], m["model_name"]))
     
     return render_template(
-        'help.html',
-        models=models,
+        'models_ui.html',
+        models=models_data,
         api_url=api_url,
         model_source=MODEL_SOURCE,
         github_repo=GITHUB_REPO
