@@ -121,28 +121,26 @@
   // Refresh a single model card by fetching current state
   async function refreshModelCard(modelName, wrapper) {
     try {
-      // Fetch current status
-      const response = await fetch(`/status/${modelName}`);
-      const statusData = await response.json();
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch model status');
+      // Fetch full model list to get complete info (including model_info for active models)
+      const modelsResponse = await fetch('/models');
+      
+      if (!modelsResponse.ok) {
+        throw new Error('Failed to fetch models list');
       }
 
-      const isActive = statusData.active;
+      const models = await modelsResponse.json();
+      const modelData = models.find(m => m.model_name === modelName);
 
-      // If state changed, rebuild the card
+      if (!modelData) {
+        throw new Error(`Model ${modelName} not found in models list`);
+      }
+
+      // Check if state actually changed
       const currentIsActive = wrapper.dataset.isActive === 'true';
+      const newIsActive = modelData.status === 'active';
       
-      if (isActive !== currentIsActive) {
-        // Fetch full model list to get complete info
-        const modelsResponse = await fetch('/models');
-        const models = await modelsResponse.json();
-        const modelData = models.find(m => m.model_name === modelName);
-
-        if (modelData) {
-          rebuildCard(wrapper, modelData);
-        }
+      if (newIsActive !== currentIsActive) {
+        rebuildCard(wrapper, modelData);
       }
 
     } catch (error) {
@@ -174,9 +172,10 @@
 
   // Build HTML for active model card
   function buildActiveCard(model) {
-    // Note: We need to fetch model_info from somewhere or pass it
-    // For now, we'll make another API call to get the full details
-    // Alternatively, enhance the /status endpoint to return model_info
+    // Extract model info
+    const modelInfo = model.model_info || {};
+    const modelType = modelInfo.type || 'Unknown';
+    const modelInfoJson = JSON.stringify(modelInfo, null, 2);
     
     return `
       <div class="flip-card active-model">
@@ -188,7 +187,7 @@
                 <i class="bi bi-check-circle-fill me-1"></i>Active
               </div>
               <h5 class="card-title fw-bold mb-2">${model.model_name}</h5>
-              <p class="card-text mb-1"><strong>Type:</strong> Loading...</p>
+              <p class="card-text mb-1"><strong>Type:</strong> ${modelType}</p>
               <p class="card-text mb-0">
                 <strong>Endpoint:</strong><br>
                 <code class="text-success">${model.predict_url || '/predict/' + model.model_name}</code>
@@ -207,7 +206,7 @@
           <div class="flip-card-back card shadow-sm border-success border-2">
             <div class="card-body overflow-auto">
               <h6 class="fw-bold text-center text-success mb-3">Model Details</h6>
-              <pre class="small text-start bg-light p-2 rounded model-info-json">Loading model information...</pre>
+              <pre class="small text-start bg-light p-2 rounded model-info-json">${modelInfoJson}</pre>
               <button class="btn btn-outline-secondary btn-sm w-100 mt-2 flip-btn">
                 <i class="bi bi-arrow-left me-1"></i>Back
               </button>
