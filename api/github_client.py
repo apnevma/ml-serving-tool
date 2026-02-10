@@ -1,10 +1,7 @@
 import os
 import requests
 import shutil
-import logging
-#from dotenv import load_dotenv
 
-#load_dotenv()
 
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
